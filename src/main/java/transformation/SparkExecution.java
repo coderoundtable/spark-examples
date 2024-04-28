@@ -2,6 +2,7 @@ package transformation;
 
 import org.apache.spark.sql.SparkSession;
 import runners.QueryRunner;
+import util.JSONReader;
 import util.SparkUtil;
 
 import java.util.Arrays;
@@ -15,21 +16,22 @@ public class SparkExecution {
         System.setProperty("hadoop.home.dir", "/");
         SparkSession spark = SparkSession.builder().master("local").appName("QueryRunnerExample").getOrCreate();
         try {
-
+            // Load JSON file
             String jsonPath = "src/main/resources/queries-dependencies.json";
+            JSONReader jsonReader = new JSONReader(jsonPath);
 
             //load all csv files and create views
             SparkUtil.loadCSV(spark, "src/main/resources/customers-100.csv", "customers");
 
             // Create a QueryRunner object
-            QueryRunner queryRunner = new QueryRunner(spark, jsonPath);
+            QueryRunner queryRunner = new QueryRunner(spark, jsonReader);
 
             // Run all queries
             queryRunner.runAllQueries();
 
             // Write specific views to tables (if needed)
 
-            List<String> viewsToWrite = queryRunner.getWriteToTable();
+            List<String> viewsToWrite = jsonReader.getWriteToTable();
             SparkUtil.writeViewsToTables(spark, viewsToWrite);
 
         } catch (Exception e) {

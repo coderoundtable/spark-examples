@@ -22,9 +22,13 @@ public class SparkUtil {
             }
         }
 
+        //create method to get dataset from view
+        public static Dataset<Row> getDatasetFromView(SparkSession sparkSession, String viewName) {
+            return sparkSession.table(viewName);
+        }
 
-    public static void loadCSV(SparkSession sparkSession, String path, String tableName) {
-        Dataset<Row> df = sparkSession.read().option("header", "true").csv(path);
-        df.createOrReplaceTempView(tableName);
-    }
+        public static void loadCSV(SparkSession sparkSession, String path, String tableName) {
+            Dataset<Row> df = sparkSession.read().option("header", "true").csv(path);
+            df.createOrReplaceTempView(tableName);
+        }
 }

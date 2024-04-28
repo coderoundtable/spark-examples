@@ -1,13 +1,11 @@
 package runners;
 
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import util.JSONReader;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.*;
 
@@ -17,9 +15,8 @@ public class QueryRunner {
     private Map<String, List<String>> dependencies;  // Map of view name to a list of dependencies
     private List<String> writeToTable;  // List of views to write to tables
 
-    public QueryRunner(SparkSession spark, String jsonFilePath) throws IOException {
+    public QueryRunner(SparkSession spark, JSONReader jsonReader) throws IOException {
         this.spark = spark;
-        JSONReader jsonReader = new JSONReader(jsonFilePath);
         this.queries = jsonReader.getQueries();
         this.dependencies = jsonReader.getDependencies();
         this.writeToTable = jsonReader.getWriteToTable();
@@ -55,11 +52,6 @@ public class QueryRunner {
         for (String viewName : queries.keySet()) {
             runQuery(viewName);
         }
-    }
-
-    //create getter for writeToTable
-    public List<String> getWriteToTable() {
-        return writeToTable;
     }
 
 }

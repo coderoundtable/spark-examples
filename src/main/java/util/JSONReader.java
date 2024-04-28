@@ -13,7 +13,7 @@ public class JSONReader {
     private Map<String, List<String>> dependencies;  // Map of view name to a list of dependencies
     private List<String> writeToTable;  // List of views to write to tables
 
-    //create a json reade method to read the json file and return the queries, dependencies and writeToTable
+    //create a json read method to read the json file and return the queries, dependencies and writeToTable
     public JSONReader(String jsonFilePath) throws IOException {
         // Read the JSON file
         ObjectMapper objectMapper = new ObjectMapper();
