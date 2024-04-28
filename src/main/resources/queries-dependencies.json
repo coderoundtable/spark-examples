@@ -1,0 +1,15 @@
+{
+  "queries": {
+    "age_grt_21": "SELECT * FROM customers WHERE age > 21",
+    "age_lt_18": "SELECT * FROM age_grt_21 WHERE age < 18",
+    "age_lt_14": "SELECT * FROM age_lt_18 WHERE age < 14",
+    "aggregate_view": "SELECT c.first_name, c.last_name, c.company, c.city FROM age_grt_21 c LEFT JOIN age_lt_18 c1 ON c.id = c1.id",
+    "filter_view": "SELECT * FROM customers WHERE country = 'Chile'",
+    "group_by_id": "SELECT COUNT(first_name) as cnt FROM filter_view group by id"
+  },
+  "dependencies": {
+    "aggregate_view": ["age_lt_18","age_grt_21"],
+    "group_by_id": ["filter_view"]
+  },
+  "writeToTable": ["aggregate_view","group_by_id"]
+}
