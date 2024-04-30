@@ -1,0 +1,13 @@
+{
+  "queries": {
+  "query1": 1,
+  "query2": 2,
+  "query3": 1,
+  "query4": 2
+},
+  "dependencies": {
+    "aggregate_view": ["age_lt_18","age_grt_21"],
+    "group_by_id": ["filter_view"]
+  },
+  "writeToTable": ["aggregate_view","group_by_id"]
+}

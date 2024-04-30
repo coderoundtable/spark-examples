@@ -1,6 +1,5 @@
 package runners;
 
-
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
@@ -10,30 +9,26 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 public class QueryRunner {
     private SparkSession spark;
-    private Map<String, String> queries;  // Map of view name to SQL query
+    private Map<String, Integer> queries;  // Map of view name to level
+    private Map<String, String> sqlQueries;  // Map of view name to SQL query
     private Map<String, List<String>> dependencies;  // Map of view name to a list of dependencies
     private List<String> writeToTable;  // List of views to write to tables
     private String sqlFilesDirectory;
 
-    public QueryRunner(SparkSession spark, JSONReader jsonReader) throws IOException {
+    public QueryRunner(SparkSession spark, JSONReader jsonReader, String sqlFilesDirectory) throws IOException {
         this.spark = spark;
         this.queries = jsonReader.getQueries();
         this.dependencies = jsonReader.getDependencies();
         this.writeToTable = jsonReader.getWriteToTable();
-
-    }
-
-    public QueryRunner(SparkSession spark, String sqlFilesDirectory,  JSONReader jsonReader) throws IOException {
-        this.spark = spark;
-        this.queries = loadQueriesFromFiles(sqlFilesDirectory);
-        this.dependencies = jsonReader.getDependencies();
-        this.writeToTable = jsonReader.getWriteToTable();
+        this.sqlFilesDirectory = sqlFilesDirectory;
+        this.sqlQueries = loadAllQueriesFromFiles();
     }
 
     //run query by view name and create a view
@@ -53,9 +48,9 @@ public class QueryRunner {
             }
         }
 
-
         System.out.println("Running query for view: " + viewName);
-        Dataset<Row> df = spark.sql(queries.get(viewName));
+        String query = sqlQueries.get(viewName);
+        Dataset<Row> df = spark.sql(query);
 
         // Create a view
         df.createOrReplaceTempView(viewName);
@@ -63,12 +58,17 @@ public class QueryRunner {
     }
 
     public void runAllQueries() {
-        for (String viewName : queries.keySet()) {
-            runQuery(viewName);
+        // Sort the queries by their level
+        List<Map.Entry<String, Integer>> sortedQueries = new ArrayList<>(queries.entrySet());
+        sortedQueries.sort(Comparator.comparingInt(Map.Entry::getValue));
+
+        // Execute the queries in order
+        for (Map.Entry<String, Integer> entry : sortedQueries) {
+            runQuery(entry.getKey());
         }
     }
 
-    private Map<String, String> loadQueriesFromFiles(String sqlFilesDirectory) {
+    private Map<String, String> loadAllQueriesFromFiles() {
         Map<String, String> loadedQueries = new HashMap<>();
         File directory = new File(sqlFilesDirectory);
         if (directory.isDirectory()) {
