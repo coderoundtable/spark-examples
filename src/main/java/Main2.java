@@ -1,6 +1,13 @@
+import com.google.gson.Gson;
 import net.sf.jsqlparser.JSQLParserException;
+import net.sf.jsqlparser.parser.CCJSqlParserUtil;
+import net.sf.jsqlparser.statement.Statement;
+import net.sf.jsqlparser.util.TablesNamesFinder;
 
 import java.io.IOException;
+import java.io.StringReader;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.*;
 
 public class Main2 {
@@ -9,7 +16,7 @@ public class Main2 {
 
     public static void main(String[] args) throws IOException, JSQLParserException {
         // Assume dependencies are populated
-        Map<String, List<String>> dependencies =  Main1.retrievDependencies();
+        Map<String, List<String>> dependencies =  retrieveDependencies ();
         String viewName = "aggregate_view"; // replace with your view name
         Node root = new Node(viewName);
         buildDependencyTree(root, dependencies);
@@ -26,6 +33,25 @@ public class Main2 {
                 buildDependencyTree(child, dependencies);
             }
         }
+    }
+
+    public static Map<String, List<String>> retrieveDependencies() throws IOException, JSQLParserException {
+        // Load fromJson from JSON
+        String json = new String(Files.readAllBytes(Paths.get("src/main/resources/dependencies.json")));
+        Map<String, Object> fromJson = new Gson().fromJson(json, Map.class);
+
+        // Parse SQL files to find dependencies
+        TablesNamesFinder tablesNamesFinder = new TablesNamesFinder();
+        Map<String, List<String>> dependencies = new HashMap<>();
+        for (String queryName : ((Map<String, Double>) fromJson.get("queries")).keySet()) {
+            String sql = new String(Files.readAllBytes(Paths.get("src/main/resources/sqls/" + queryName + ".sql")));
+            Statement statement = CCJSqlParserUtil.parse(new StringReader(sql));
+            List<String> tableList = tablesNamesFinder.getTableList(statement);
+
+            // Add dependencies to the map
+            dependencies.put(queryName, tableList);
+        }
+        return dependencies;
     }
 
     static class Node {

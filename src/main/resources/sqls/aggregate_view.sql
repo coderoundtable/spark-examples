@@ -1,1 +1,1 @@
-SELECT c.first_name, c.last_name, c1.company, c1.city FROM age_grt_21 c LEFT JOIN age_lt_18 c1 ON c.id = c1.id
+SELECT c.first_name, c.last_name, c.company, c.city FROM age_grt_21 c LEFT JOIN age_lt_18 c1 ON c.id = c1.id

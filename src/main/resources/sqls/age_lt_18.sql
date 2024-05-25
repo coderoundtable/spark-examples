@@ -1,1 +1,1 @@
-SELECT c1.company, c1.city FROM age_lt_18 WHERE age < 18
+SELECT c1.company, c1.city FROM customers WHERE age < 18
