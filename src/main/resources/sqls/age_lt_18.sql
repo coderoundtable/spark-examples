@@ -1,0 +1,1 @@
+SELECT * FROM age_grt_21 WHERE age < 18

@@ -25,7 +25,7 @@ public class SparkExecution {
             SparkUtil.loadCSV(spark, "src/main/resources/customers-100.csv", "customers");
 
             // Create a QueryRunner object
-            QueryRunner queryRunner = new QueryRunner(spark,sqlFilesDirectory, jsonReader);
+            QueryRunner queryRunner = new QueryRunner(spark,jsonReader, sqlFilesDirectory);
 
             // Run all queries
             queryRunner.runAllQueries();

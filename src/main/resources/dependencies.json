@@ -1,9 +1,8 @@
 {
   "queries": {
-  "query1": 1,
-  "query2": 2,
-  "query3": 1,
-  "query4": 2
+  "age_grt_21": 1,
+  "age_lt_18": 1,
+  "aggregate_view": 2
 },
   "dependencies": {
     "aggregate_view": ["age_lt_18","age_grt_21"],

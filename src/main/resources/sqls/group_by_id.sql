@@ -1,0 +1,1 @@
+select COUNT(first_name) as cnt FROM filter_view group by id

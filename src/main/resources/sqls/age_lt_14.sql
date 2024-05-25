@@ -1,0 +1,1 @@
+SELECT * FROM age_lt_18 WHERE age < 14
