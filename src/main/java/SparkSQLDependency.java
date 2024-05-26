@@ -9,6 +9,7 @@ import scala.collection.JavaConverters;
 import scala.collection.Seq;
 
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
@@ -24,11 +25,14 @@ public class SparkSQLDependency {
 
         // Assume dependencies are populated
         Map<String, List<String>> dependencies =  retrieveDependencies(spark);
-        String viewName = "aggregate_view"; // replace with your view name
+        String viewName = "group_by_id"; // replace with your view name
         Node root = new Node(viewName);
         buildDependencyTree(root, dependencies);
 
-        System.out.println(root.prettyPrint());
+        // Write output to a file
+        try (PrintWriter out = new PrintWriter("sql-dependency-tree.txt")) {
+            out.println(root.prettyPrint());
+        }
     }
 
     public static void buildDependencyTree(Node node, Map<String, List<String>> dependencies) {
