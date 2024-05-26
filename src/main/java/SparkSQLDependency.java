@@ -10,7 +10,9 @@ import scala.collection.Seq;
 
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -20,12 +22,14 @@ public class SparkSQLDependency {
     static Map<String, List<String>> dependencies = new HashMap<>();
 
     public static void main(String[] args) throws IOException, ParseException {
+
+        System.setProperty("hadoop.home.dir", "/");
         // Initialize Spark session
         SparkSession spark = SparkSession.builder().master("local").appName("SQL Dependency Parser").getOrCreate();
 
         // Assume dependencies are populated
-        Map<String, List<String>> dependencies =  retrieveDependencies(spark);
-        String viewName = "group_by_id"; // replace with your view name
+        Map<String, List<String>> dependencies =  retrieveDependenciesFromDir(spark);
+        String viewName = "aggregate_view"; // replace with your view name
         Node root = new Node(viewName);
         buildDependencyTree(root, dependencies);
 
@@ -71,6 +75,35 @@ public class SparkSQLDependency {
 
             // Add dependencies to the map
             dependencies.put(queryName, tableList);
+        }
+        return dependencies;
+    }
+
+    public static Map<String, List<String>> retrieveDependenciesFromDir(SparkSession spark) throws IOException, ParseException {
+        // Initialize Spark SQL parser
+        SparkSqlParser parser = new SparkSqlParser();
+
+        // Parse SQL files to find dependencies
+        Map<String, List<String>> dependencies = new HashMap<>();
+        Path dir = Paths.get("src/main/resources/sqls/");
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(dir, "*.sql")) {
+            for (Path entry : stream) {
+                String queryName = entry.getFileName().toString().replace(".sql", "");
+                String sql = new String(Files.readAllBytes(entry));
+
+                // Parse SQL using Spark SQL parser
+                LogicalPlan plan = parser.parsePlan(sql);
+
+                // Extract table names
+                List<String> tableList = JavaConverters.seqAsJavaListConverter(plan.collectLeaves()).asJava()
+                        .stream()
+                        .filter(node -> node instanceof UnresolvedRelation)
+                        .map(node -> ((UnresolvedRelation) node).tableName())
+                        .collect(Collectors.toList());
+
+                // Add dependencies to the map
+                dependencies.put(queryName, tableList);
+            }
         }
         return dependencies;
     }
