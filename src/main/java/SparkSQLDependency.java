@@ -32,27 +32,29 @@ public class SparkSQLDependency {
         SparkSession spark = SparkSession.builder().appName("SparkSQLDependency").master("local").getOrCreate();
 
         // Assume dependencies are populated for tables
-        Map<String, List<String>> dependencies =  retrieveDependenciesFromDir(spark);
+//        Map<String, List<String>> dependencies =  retrieveDependenciesFromDir(spark);
 
         // Assume dependencies are populated for colums
-//        Map<String, List<String>> dependencies = retrieveColumnDependenciesFromDir(spark);
+        Map<String, List<String>> dependencies = retrieveColumnDependenciesFromDir(spark);
         String viewName = "aggregate_view"; // replace with your view name
         Node root = new Node(viewName);
 
 
         // Build dependency tree for columns
-//        buildColDependencyTree(root, dependencies);
+        buildColDependencyTree(root, dependencies);
 
         //build dependency tree for tables
-        buildDependencyTree(root, dependencies);
+
+//        buildDependencyTree(root, dependencies);
 
         // Get impact of a table
-        List<String> tableImpact = getImpact("customers", createReverseDependencyMap(dependencies));
-        System.out.println(tableImpact);
+//        List<String> tableImpact = getImpact("customers", createReverseDependencyMap(dependencies));
+//        System.out.println(tableImpact);
 
-        // Get impact of a column
-//        List<String> columnImpact = getImpact("c.first_name", createReverseColumnDependencyMap(dependencies));
-//        System.out.println(columnImpact);
+         //Get impact of a column
+
+        Set<String> columnImpact = getImpact("first_name", createReverseColumnDependencyMap(dependencies));
+        System.out.println(columnImpact);
 
         // Write output to a file
         try (PrintWriter out = new PrintWriter("sql-dependency-tree.txt")) {
@@ -176,9 +178,10 @@ public class SparkSQLDependency {
         return reverseDependencies;
     }
 
-    public static List<String> getImpact(String tableOrColumn, Map<String, List<String>> reverseDependencies) {
-        return reverseDependencies.getOrDefault(tableOrColumn, Collections.emptyList());
+    public static Set<String> getImpact(String column, Map<String, List<String>> reverseColumnDependencies) {
+        return new HashSet<>(reverseColumnDependencies.getOrDefault(column, Collections.emptyList()));
     }
+
 
 
     public static List<String> getColumnNames(String sql, SparkSession spark) throws ParseException {
@@ -225,9 +228,10 @@ public class SparkSQLDependency {
         return reverseDependencies;
     }
 
-    public static List<String> getColumnImpact(String column, Map<String, List<String>> reverseColumnDependencies) {
-        return reverseColumnDependencies.getOrDefault(column, Collections.emptyList());
+    public static Set<String> getColumnImpact(String column, Map<String, List<String>> reverseColumnDependencies) {
+        return new HashSet<>(reverseColumnDependencies.getOrDefault(column, Collections.emptyList()));
     }
+
 
 
 
