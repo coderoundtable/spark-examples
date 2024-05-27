@@ -35,6 +35,21 @@ public class Main2 {
         }
     }
 
+    public static void buildDependencyTree(Node node, Map<String, List<String>> dependencies, Set<String> visited) {
+        visited.add(node.name);
+        List<String> directDependencies = dependencies.get(node.name);
+        if (directDependencies != null) {
+            for (String dependency : directDependencies) {
+                if (!visited.contains(dependency) && !dependency.equals(node.name)) {
+                    Node child = new Node(dependency);
+                    node.children.add(child);
+                    buildDependencyTree(child, dependencies, visited);
+                }
+            }
+        }
+    }
+
+
     public static Map<String, List<String>> retrieveDependencies() throws IOException, JSQLParserException {
         // Load fromJson from JSON
         String json = new String(Files.readAllBytes(Paths.get("src/main/resources/dependencies.json")));
