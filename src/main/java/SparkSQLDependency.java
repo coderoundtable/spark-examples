@@ -3,13 +3,10 @@ import org.apache.spark.sql.SparkSession;
 import org.apache.spark.sql.catalyst.analysis.UnresolvedAttribute;
 import org.apache.spark.sql.catalyst.analysis.UnresolvedRelation;
 import org.apache.spark.sql.catalyst.expressions.Expression;
-import org.apache.spark.sql.catalyst.expressions.NamedExpression;
 import org.apache.spark.sql.catalyst.parser.ParseException;
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan;
-import org.apache.spark.sql.catalyst.plans.logical.Project;
 import org.apache.spark.sql.execution.SparkSqlParser;
 import scala.collection.JavaConverters;
-import scala.collection.Seq;
 import scala.runtime.AbstractPartialFunction;
 
 import java.io.IOException;
@@ -29,13 +26,13 @@ public class SparkSQLDependency {
 
         System.setProperty("hadoop.home.dir", "/");
         // Initialize Spark session
-        SparkSession spark = SparkSession.builder().appName("SparkSQLDependency").master("local").getOrCreate();
+//        SparkSession spark = SparkSession.builder().appName("SparkSQLDependency").master("local").getOrCreate();
 
         // Assume dependencies are populated for tables
 //        Map<String, List<String>> dependencies =  retrieveDependenciesFromDir(spark);
 
         // Assume dependencies are populated for colums
-        Map<String, List<String>> dependencies = retrieveColumnDependenciesFromDir(spark);
+        Map<String, List<String>> dependencies = retrieveColumnDependenciesFromDir();
         String viewName = "aggregate_view"; // replace with your view name
         Node root = new Node(viewName);
 
@@ -141,7 +138,7 @@ public class SparkSQLDependency {
         return dependencies;
     }
 
-    public static Map<String, List<String>> retrieveColumnDependenciesFromDir(SparkSession sparkSession) throws IOException, ParseException {
+    public static Map<String, List<String>> retrieveColumnDependenciesFromDir() throws IOException, ParseException {
         // Initialize Spark SQL parser
         SparkSqlParser parser = new SparkSqlParser();
 
@@ -157,7 +154,7 @@ public class SparkSQLDependency {
 
 
                 // Add dependencies to the map
-                dependencies.put(entry.getFileName().toString().replace(".sql", ""), getColumnNames(sql,sparkSession));
+                dependencies.put(entry.getFileName().toString().replace(".sql", ""), getColumnNames(sql,plan));
             }
         }
         return dependencies;
@@ -184,9 +181,9 @@ public class SparkSQLDependency {
 
 
 
-    public static List<String> getColumnNames(String sql, SparkSession spark) throws ParseException {
+    public static List<String> getColumnNames(String sql,  LogicalPlan plan) throws ParseException {
         // Parse the SQL query into a LogicalPlan
-        LogicalPlan plan = spark.sessionState().sqlParser().parsePlan(sql);
+//        LogicalPlan plan = spark.sessionState().sqlParser().parsePlan(sql);
 
         // Initialize a list to hold the column names
         List<String> columnNames = new ArrayList<>();
