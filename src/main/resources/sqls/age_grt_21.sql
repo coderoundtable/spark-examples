@@ -1,1 +1,1 @@
-SELECT age,Id,first_name,last_name FROM customers WHERE age > 21
+SELECT * FROM customers WHERE age > 21

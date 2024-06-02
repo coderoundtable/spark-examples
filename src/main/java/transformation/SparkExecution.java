@@ -1,5 +1,7 @@
 package transformation;
 
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SparkSession;
 import runners.QueryRunner;
 import util.JSONReader;
@@ -33,7 +35,7 @@ public class SparkExecution {
             // Write specific views to tables (if needed)
 
             List<String> viewsToWrite = jsonReader.getWriteToTable();
-            SparkUtil.writeViewsToTables(spark, viewsToWrite);
+            Dataset<Row> resultDs = SparkUtil.getDatasetFromView(spark, viewsToWrite.get(0));
 
         } catch (Exception e) {
             e.printStackTrace();
