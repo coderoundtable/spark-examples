@@ -80,7 +80,7 @@ public class ExtractLineage {
         );
 
         // Recursively find the source DataFrames or views
-        Set<String> sourceTables = findSourceTables(logicalPlan);
+        Set<String> sourceTables = findDependencies(logicalPlan);
 
         List<TransformationInfo> transformationList = extractTransformations(allNodes);
 
@@ -119,18 +119,29 @@ public class ExtractLineage {
 //        lineageMap.put(tableName, new TableLineageInfo(tableName, sourceTableNames, transformationList));
 //    }
 
-    private Set<String> findSourceTables(LogicalPlan plan) {
-        Set<String> tables = new HashSet<>();
-        if (plan instanceof LogicalRelation) {
-            tables.add(((LogicalRelation) plan).relation().toString());
-        } else if (plan instanceof UnresolvedRelation) {
-            tables.add(((UnresolvedRelation) plan).tableName());
+    private Set<String> findDependencies(LogicalPlan plan) {
+        Set<String> dependencies = new HashSet<>();
+//        if (plan instanceof LogicalRelation) {
+//            // Handle direct relations to data sources
+//            LogicalRelation relation = (LogicalRelation) plan;
+//            dependencies.add(((LogicalRelation) plan).relation().toString());
+//        } else
+          if (plan instanceof UnresolvedRelation) {
+            // Handle unresolved relations, typically views or tables
+            UnresolvedRelation unresolvedRelation = (UnresolvedRelation) plan;
+            dependencies.add(unresolvedRelation.tableName());
+        } else if (plan instanceof SubqueryAlias) {
+            // Handle subquery aliases which can represent views
+            SubqueryAlias alias = (SubqueryAlias) plan;
+            dependencies.add(alias.alias());
+            // Recursively find dependencies in the child of the alias
+            dependencies.addAll(findDependencies(alias.child()));
         }
-        // Convert Scala Seq to Java Iterable and iterate
+        // Recursively find dependencies in child nodes
         for (LogicalPlan child : JavaConverters.seqAsJavaList(plan.children())) {
-            tables.addAll(findSourceTables(child));
+            dependencies.addAll(findDependencies(child));
         }
-        return tables;
+        return dependencies;
     }
 
 
@@ -196,5 +207,16 @@ public class ExtractLineage {
             return transformations;
         }
     }
+
+    private static class DependencyNode {
+        String name;
+        List<DependencyNode> children;
+
+        DependencyNode(String name) {
+            this.name = name;
+            this.children = new ArrayList<>();
+        }
+    }
+
 
 }
