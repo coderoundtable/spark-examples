@@ -11,6 +11,7 @@ import scala.runtime.AbstractPartialFunction;
 import util.JSONReader;
 import util.SparkUtil;
 
+import java.io.FileWriter;
 import java.io.IOException;
 import java.util.*;
 
@@ -53,8 +54,10 @@ public class ExtractLineage {
 
         lineageExtractor.captureLineage(finalReportDf, "ReportingTable");
 
-        // Print the captured lineage information in JSON format
-        lineageExtractor.printLineageAsJson();
+//        // Print the captured lineage information in JSON format
+//        lineageExtractor.printLineageAsJson();
+
+        lineageExtractor.writeLineageToFile("data-dependencies.json");
 
         spark.stop();
     }
@@ -79,12 +82,18 @@ public class ExtractLineage {
                 )
         );
 
+        DependencyNode rootNode = new DependencyNode("FinalTable");
+
         // Recursively find the source DataFrames or views
-        Set<String> sourceTables = findDependencies(logicalPlan);
+        DependencyNode dependencies = findDependencies(logicalPlan);
+
+        // Convert the DependencyNode tree to a set of source table names
+//        Set<String> sourceTables = convertToTableNames(dependencies);
 
         List<TransformationInfo> transformationList = extractTransformations(allNodes);
 
-        lineageMap.put(tableName, new TableLineageInfo(tableName, new ArrayList<>(sourceTables), transformationList));
+        lineageMap.put(tableName, new TableLineageInfo(tableName, dependencies, transformationList));
+
     }
 
     private void printLineageAsJson() {
@@ -96,52 +105,75 @@ public class ExtractLineage {
         }
     }
 
-//    private void captureLineage(Dataset<Row> dataset, String tableName, List<String> sourceTableNames) {
-//
-//        List<TransformationInfo> transformationList = new ArrayList<>();
-//        for (LogicalPlan node : (Iterable<LogicalPlan>) logicalPlan.collect()) {
-//            if (node instanceof Project) {
-//                Project project = (Project) node;
-//                transformationList.add(new TransformationInfo("Select", "Selected columns: " + project.projectList()));
-//            } else if (node instanceof Filter) {
-//                Filter filter = (Filter) node;
-//                transformationList.add(new TransformationInfo("Filter", "Filtered rows where: " + filter.condition()));
-//            } else if (node instanceof Aggregate) {
-//                Aggregate aggregate = (Aggregate) node;
-//                transformationList.add(new TransformationInfo("Aggregate", "Aggregated by: " + aggregate.groupingExpressions() + ", with aggregations: " + aggregate.aggregateExpressions()));
-//            } else if (node instanceof Sort) {
-//                Sort sort = (Sort) node;
-//                transformationList.add(new TransformationInfo("Sort", "Sorted by: " + sort.order()));
-//            }
-//            // Add more cases for other types of transformations as needed
-//        }
-//
-//        lineageMap.put(tableName, new TableLineageInfo(tableName, sourceTableNames, transformationList));
-//    }
-
-    private Set<String> findDependencies(LogicalPlan plan) {
-        Set<String> dependencies = new HashSet<>();
-//        if (plan instanceof LogicalRelation) {
-//            // Handle direct relations to data sources
-//            LogicalRelation relation = (LogicalRelation) plan;
-//            dependencies.add(((LogicalRelation) plan).relation().toString());
-//        } else
-          if (plan instanceof UnresolvedRelation) {
+    private DependencyNode findDependencies(LogicalPlan plan) {
+        if (plan instanceof UnresolvedRelation) {
             // Handle unresolved relations, typically views or tables
             UnresolvedRelation unresolvedRelation = (UnresolvedRelation) plan;
-            dependencies.add(unresolvedRelation.tableName());
+            return new DependencyNode(unresolvedRelation.tableName());
         } else if (plan instanceof SubqueryAlias) {
             // Handle subquery aliases which can represent views
             SubqueryAlias alias = (SubqueryAlias) plan;
-            dependencies.add(alias.alias());
-            // Recursively find dependencies in the child of the alias
-            dependencies.addAll(findDependencies(alias.child()));
+            DependencyNode node = new DependencyNode(alias.alias());
+            node.addChild(findDependencies(alias.child()));
+            return node;
+        } else {
+            // Create a node for this logical plan
+            DependencyNode node = new DependencyNode(plan.getClass().getSimpleName());
+            // Recursively find dependencies in child nodes
+            for (LogicalPlan child : JavaConverters.seqAsJavaList(plan.children())) {
+                node.addChild(findDependencies(child));
+            }
+            return node;
         }
-        // Recursively find dependencies in child nodes
-        for (LogicalPlan child : JavaConverters.seqAsJavaList(plan.children())) {
-            dependencies.addAll(findDependencies(child));
+    }
+
+    private void writeLineageToFile(String filePath) {
+        try {
+            // Convert the lineage map to JSON
+            String json = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(lineageMap);
+
+            // Write JSON to the specified file
+            try (FileWriter fileWriter = new FileWriter(filePath)) {
+                fileWriter.write(json);
+            }
+
+            System.out.println("Lineage information has been written to: " + filePath);
+        } catch (IOException e) {
+            e.printStackTrace();
         }
-        return dependencies;
+    }
+
+
+//    private Set<String> findDependencies(LogicalPlan plan) {
+//        Set<String> dependencies = new HashSet<>();
+//        if (plan instanceof UnresolvedRelation) {
+//            // Handle unresolved relations, typically views or tables
+//            UnresolvedRelation unresolvedRelation = (UnresolvedRelation) plan;
+//            dependencies.add(unresolvedRelation.tableName());
+//        } else if (plan instanceof SubqueryAlias) {
+//            // Handle subquery aliases which can represent views
+//            SubqueryAlias alias = (SubqueryAlias) plan;
+//            dependencies.add(alias.alias());
+//            // Recursively find dependencies in the child of the alias
+//            dependencies.addAll(findDependencies(alias.child()));
+//        }
+//        // Recursively find dependencies in child nodes
+//        for (LogicalPlan child : JavaConverters.seqAsJavaList(plan.children())) {
+//            dependencies.addAll(findDependencies(child));
+//        }
+//        return dependencies;
+//    }
+
+    private Set<String> convertToTableNames(DependencyNode node) {
+        Set<String> tableNames = new HashSet<>();
+        if (node.children.isEmpty()) {
+            tableNames.add(node.name);
+        } else {
+            for (DependencyNode child : node.children) {
+                tableNames.addAll(convertToTableNames(child));
+            }
+        }
+        return tableNames;
     }
 
 
@@ -186,21 +218,23 @@ public class ExtractLineage {
 
     private static class TableLineageInfo {
         private final String tableName;
-        private final List<String> sourceTableNames;
+        private final DependencyNode dependencyTree; // Changed from sourceTableNames to dependencyTree
         private final List<TransformationInfo> transformations;
 
-        public TableLineageInfo(String tableName, List<String> sourceTableNames, List<TransformationInfo> transformations) {
+        public TableLineageInfo(String tableName, DependencyNode dependencyTree, List<TransformationInfo> transformations) {
             this.tableName = tableName;
-            this.sourceTableNames = sourceTableNames;
+            this.dependencyTree = dependencyTree;
             this.transformations = transformations;
         }
+
+        // Getters
 
         public String getTableName() {
             return tableName;
         }
 
-        public List<String> getSourceTableNames() {
-            return sourceTableNames;
+        public DependencyNode getDependencyTree() {
+            return dependencyTree;
         }
 
         public List<TransformationInfo> getTransformations() {
@@ -215,6 +249,18 @@ public class ExtractLineage {
         DependencyNode(String name) {
             this.name = name;
             this.children = new ArrayList<>();
+        }
+
+        public void addChild(DependencyNode child) {
+            this.children.add(child);
+        }
+
+        public String getName() {
+            return name;
+        }
+
+        public List<DependencyNode> getChildren() {
+            return children;
         }
     }
 
