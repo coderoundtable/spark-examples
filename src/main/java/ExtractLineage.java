@@ -114,17 +114,24 @@ public class ExtractLineage {
             // Handle subquery aliases which can represent views
             SubqueryAlias alias = (SubqueryAlias) plan;
             DependencyNode node = new DependencyNode(alias.alias());
-            node.addChild(findDependencies(alias.child()));
-            return node;
-        } else {
-            // Create a node for this logical plan
-            DependencyNode node = new DependencyNode(plan.getClass().getSimpleName());
-            // Recursively find dependencies in child nodes
-            for (LogicalPlan child : JavaConverters.seqAsJavaList(plan.children())) {
-                node.addChild(findDependencies(child));
+            // Recursively find dependencies in the child of the alias
+            DependencyNode childNode = findDependencies(alias.child());
+            if (childNode != null) {
+                node.addChild(childNode);
             }
             return node;
+        } else {
+            // Recursively process children nodes to find tables or views
+            for (LogicalPlan child : JavaConverters.seqAsJavaList(plan.children())) {
+                DependencyNode childNode = findDependencies(child);
+                if (childNode != null) {
+                    // If a child node representing a table or view is found, return it
+                    return childNode;
+                }
+            }
         }
+        // Return null if the plan does not represent a table or view
+        return null;
     }
 
     private void writeLineageToFile(String filePath) {
