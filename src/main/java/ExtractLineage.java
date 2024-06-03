@@ -19,6 +19,7 @@ public class ExtractLineage {
 
     private static final Map<String, Object> lineageMap = new HashMap<>();
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private final String keyName = "Lineage";
 
     public static void main(String[] args) throws IOException {
         SparkSession spark = SparkSession.builder()
@@ -52,7 +53,7 @@ public class ExtractLineage {
         // Example DataFrame loading tables and creating views
         // ... (same as before)
 
-        lineageExtractor.captureLineage(finalReportDf, "ReportingTable");
+        lineageExtractor.captureLineage(finalReportDf, "Reporting table");
 
 //        // Print the captured lineage information in JSON format
 //        lineageExtractor.printLineageAsJson();
@@ -82,17 +83,16 @@ public class ExtractLineage {
                 )
         );
 
-        DependencyNode rootNode = new DependencyNode("FinalTable");
-
         // Recursively find the source DataFrames or views
         DependencyNode dependencies = findDependencies(logicalPlan);
 
+        dependencies.prettyPrint(dependencies);
         // Convert the DependencyNode tree to a set of source table names
 //        Set<String> sourceTables = convertToTableNames(dependencies);
 
         List<TransformationInfo> transformationList = extractTransformations(allNodes);
 
-        lineageMap.put(tableName, new TableLineageInfo(tableName, dependencies, transformationList));
+        lineageMap.put(keyName, new TableLineageInfo(tableName, dependencies, transformationList));
 
     }
 
@@ -251,11 +251,10 @@ public class ExtractLineage {
 
     private static class DependencyNode {
         String name;
-        List<DependencyNode> children;
+        List<DependencyNode> children = new ArrayList<>();
 
         DependencyNode(String name) {
             this.name = name;
-            this.children = new ArrayList<>();
         }
 
         public void addChild(DependencyNode child) {
@@ -268,6 +267,22 @@ public class ExtractLineage {
 
         public List<DependencyNode> getChildren() {
             return children;
+        }
+
+        void prettyPrint(DependencyNode dependencyNode) {
+             prettyPrintDependencies(dependencyNode, "");
+        }
+
+        public void prettyPrintDependencies(DependencyNode node, String indent) {
+            if (node == null) {
+                return;
+            }
+            // Print the current node with the indent
+            System.out.println(indent + "- " + node.getName());
+            // Recursively print children with an increased indent
+            for (DependencyNode child : node.getChildren()) {
+                prettyPrintDependencies(child, indent + "  ");
+            }
         }
     }
 
