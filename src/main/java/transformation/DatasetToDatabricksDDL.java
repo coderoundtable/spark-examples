@@ -69,7 +69,7 @@ public class DatasetToDatabricksDDL {
         } else if (dataType instanceof DateType) {
             return "DATE";
         } else {
-            return "STRING"; // Default type
+            return "STRING";
         }
     }
 }
