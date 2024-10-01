@@ -3,4 +3,5 @@ WITH age_grt_22 AS (
     FROM age_grt_21 c
     WHERE c.age > 21
 )
-SELECT first_name, last_name, company, city FROM age_grt_22
+SELECT city, count(*) FROM age_grt_22
+GROUP BY city

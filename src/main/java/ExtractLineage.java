@@ -200,6 +200,10 @@ public class ExtractLineage {
                 Sort sort = (Sort) node;
                 transformations.add(new TransformationInfo("Sort", "Sorted by: " + sort.order()));
             }
+            else if (node instanceof Join) {
+                Join join = (Join) node;
+                transformations.add(new TransformationInfo("JOIN", "JOIN ON: " + join.condition().get().sql() + " and JOIN Type" + join.joinType().sql()));
+            }
             // Add more cases for other types of transformations as needed
         }
         return transformations;
