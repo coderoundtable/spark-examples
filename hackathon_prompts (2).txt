@@ -1,0 +1,496 @@
+================================================================================
+HACKATHON PROMPTS — AGENTIC DATA QUALITY DIGEST
+================================================================================
+Three prompts included:
+  PROMPT 1 — Schema Validation
+  PROMPT 2 — Repo & Setup Understanding + Architecture Decision + Code Generation
+  PROMPT 3 — LLM Digest Generation (runtime prompt)
+================================================================================
+INSTRUCTIONS
+================================================================================
+Step 1: Run PROMPT 1 first — paste your three table schemas where indicated.
+        Confirm all five agentic features are supported before writing code.
+        Copy the validated SQL queries from the response — you will need them.
+
+Step 2: Run PROMPT 2 second — open your full repo in IntelliJ so Copilot/Claude
+        has full context. Paste the validated SQL queries from Prompt 1 where
+        indicated. Copilot/Claude will analyse your repo, decide the most
+        optimal agent architecture for your setup, and generate all code.
+
+Step 3: Prompt 3 is the runtime LLM prompt. It is referenced inside Prompt 2.
+        Do not run it separately — Copilot/Claude will embed it automatically
+        when generating the Digest Generator Agent code.
+================================================================================
+
+
+================================================================================
+PROMPT 1 — SCHEMA VALIDATION
+================================================================================
+Purpose  : Validate that your three Databricks tables support all five agentic
+           features before writing any code.
+When     : Run first in IntelliJ. Paste your three table schemas where
+           indicated. Copy the validated SQL queries from the response.
+================================================================================
+
+I am building an agentic data quality digest that automatically generates a
+daily governance email. It replaces a manual process where an L1 data team
+reads a recon dashboard and writes a summary email to a data governance team.
+
+I have three existing Databricks tables. My data platform has three pipeline
+zones — OLTP→RAW, RAW→TRUSTED, and TRUSTED→REFINED — and tables are grouped
+into three business categories: A, B, and C. Each category has multiple tables
+across all three zones. Each table in all three Databricks tables has a
+partition_date column that holds a daily snapshot of results.
+
+Here are my three table schemas:
+
+--------------------------------------------------------------------------------
+[PASTE recon_summary SCHEMA HERE]
+Example format:
+  column_name       | data_type | description
+  ----------------- | --------- | -----------
+  table_name        | STRING    | name of the table being reconciled
+  category          | STRING    | business category A, B, or C
+  zone              | STRING    | pipeline zone e.g. OLTP_RAW, RAW_TRUSTED etc
+  status            | STRING    | PASS or FAIL
+  ms_count          | BIGINT    | Missing in Source record count
+  mt_count          | BIGINT    | Missing in Target record count
+  duplicate_count   | BIGINT    | Duplicate record count
+  source_count      | BIGINT    | total source record count
+  target_count      | BIGINT    | total target record count
+  partition_date    | DATE      | daily snapshot date
+--------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+[PASTE recon_detail SCHEMA HERE]
+Example format:
+  column_name       | data_type | description
+  ----------------- | --------- | -----------
+  table_name        | STRING    | name of the table being reconciled
+  attribute_name    | STRING    | column or attribute with the break
+  break_type        | STRING    | MS, MT, or DUP
+  break_count       | BIGINT    | number of records breaking on this attribute
+  partition_date    | DATE      | daily snapshot date
+--------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+[PASTE volume_trend SCHEMA HERE]
+Example format:
+  column_name       | data_type | description
+  ----------------- | --------- | -----------
+  table_name        | STRING    | name of the table
+  category          | STRING    | business category A, B, or C
+  zone              | STRING    | pipeline zone
+  row_count         | BIGINT    | actual row count for the day
+  avg_30_day        | BIGINT    | 30-day rolling average row count
+  pct_variance      | DECIMAL   | percentage variance vs 30-day average
+  partition_date    | DATE      | daily snapshot date
+--------------------------------------------------------------------------------
+
+Please validate whether each of the following five agentic features is:
+  - FULLY SUPPORTED
+  - PARTIALLY SUPPORTED
+  - NOT SUPPORTED
+
+For each feature provide:
+  1. Support status
+  2. Exact columns you are relying on
+  3. SQL query to extract the required data
+  4. Any gaps or missing columns that would prevent this from working
+
+--------------------------------------------------------------------------------
+FEATURE 1 — BREAK ORIGIN DETECTION
+--------------------------------------------------------------------------------
+Goal: Determine which zone a break originated in by comparing status across
+all three zones for the same table on the same partition_date.
+
+Logic:
+  OLTP→RAW clean,  RAW→TRUSTED broken, TRUSTED→REFINED broken
+  → Origin is transformation layer. Source data arrived correctly.
+
+  OLTP→RAW broken, RAW→TRUSTED broken, TRUSTED→REFINED broken
+  → Origin is source extraction. Everything downstream is contaminated.
+
+  OLTP→RAW clean,  RAW→TRUSTED clean,  TRUSTED→REFINED broken
+  → Origin is business logic or join layer. Raw and trusted data are fine.
+
+Please write the SQL that groups recon_summary by table_name and zone for
+today's partition_date to support this origin classification.
+
+--------------------------------------------------------------------------------
+FEATURE 2 — BLAST RADIUS ASSESSMENT
+--------------------------------------------------------------------------------
+Goal: Identify which refined layer tables have breaks today so they can be
+cross-referenced against a separate report_mapping.json config file that maps
+refined tables to business report names, audiences, and criticality levels.
+
+I will maintain this config file separately. The agent only needs to reliably
+extract which tables in the TRUSTED→REFINED zone have a FAIL status today.
+
+Please write the SQL to extract broken refined tables by category for today.
+
+--------------------------------------------------------------------------------
+FEATURE 3 — BREAK PROPAGATION TRACKING
+--------------------------------------------------------------------------------
+Goal: Compare partition_date = today against partition_date = yesterday for
+the same table and zone. Detect whether a break that existed in an upstream
+zone yesterday has now appeared in a downstream zone today — indicating
+overnight propagation toward the refined and report layer.
+
+Propagation scenarios to detect:
+  Yesterday: RAW→TRUSTED broken, TRUSTED→REFINED clean
+  Today:     RAW→TRUSTED broken, TRUSTED→REFINED broken
+  → Break has propagated overnight. New escalation required.
+
+  Yesterday: RAW→TRUSTED broken, TRUSTED→REFINED broken
+  Today:     RAW→TRUSTED broken, TRUSTED→REFINED broken
+  → Break persisting. Already known. Not a new propagation.
+
+  Yesterday: RAW→TRUSTED broken
+  Today:     RAW→TRUSTED clean
+  → Break resolved. Good news to include in digest.
+
+Please write the SQL that produces a before/after comparison per table per
+zone across today and yesterday.
+
+--------------------------------------------------------------------------------
+FEATURE 4 — RECURRENCE PATTERN DETECTION
+--------------------------------------------------------------------------------
+Goal: Use partition_date history across the last 30 days to classify each
+breaking table as follows:
+
+  First occurrence  → 0 prior failures in last 30 days
+  Occasional        → 1 to 2 failures in last 30 days
+  Recurring         → 3 to 5 failures in last 30 days
+  Chronic           → 6 or more failures in last 30 days
+
+Additionally detect timing patterns where failures cluster:
+  Month end pattern → failures concentrated in last 3 days of month
+  Weekly pattern    → failures occur on same day of week repeatedly
+  Random            → no identifiable timing pattern
+
+Please write the SQL to produce failure frequency and first occurrence date
+per table per zone over the last 30 days. Also write the SQL to support
+timing pattern detection.
+
+--------------------------------------------------------------------------------
+FEATURE 5 — ATTRIBUTE LEVEL RECURRENCE
+--------------------------------------------------------------------------------
+Goal: Use recon_detail with partition_date history to identify which specific
+attributes are repeatedly breaking within each table. Rank attributes by
+number of days failing in the last 30 days and include first seen date.
+
+This helps governance and engineering identify whether a break is a persistent
+attribute-level mapping issue rather than a table-level load problem.
+
+Please write the SQL to rank attributes by failure frequency per table over
+the last 30 days including: attribute_name, break_type, days_failing,
+first_seen date, and last_seen date.
+
+--------------------------------------------------------------------------------
+After validating all five features please also confirm:
+  - Whether any additional columns would significantly improve any feature
+  - Whether the partition_date column is sufficient for all date-based queries
+  - Any performance considerations for querying 30 days of history across
+    200+ tables
+--------------------------------------------------------------------------------
+
+
+================================================================================
+PROMPT 2 — REPO UNDERSTANDING + ARCHITECTURE DECISION + CODE GENERATION
+================================================================================
+Purpose  : Analyse existing repo and ADK setup, decide the most optimal and
+           efficient agent architecture, then generate all code in one shot.
+When     : Run after Prompt 1. Open full repo in IntelliJ so Copilot/Claude
+           has complete context. Paste validated SQL queries where indicated.
+================================================================================
+
+I am building an agentic data quality digest using Google ADK. I have already
+validated my Databricks table schemas and confirmed the SQL queries for five
+agentic features. Before generating any code I need you to analyse my existing
+repo and setup, then decide the most optimal agent architecture for my specific
+situation, and then generate all the code.
+
+--------------------------------------------------------------------------------
+SECTION 1 — UNDERSTAND MY REPO AND SETUP
+--------------------------------------------------------------------------------
+Please scan my full repository and identify:
+
+EXISTING ADK PATTERNS
+  - How agent.yml files are structured in my existing sample agents
+  - How tools are defined and registered — tools.py pattern or equivalent
+  - How the LLM model is referenced — exact model string and format in YAML
+  - How sub-agents are defined and orchestrated from a root agent
+  - How environment variables are loaded and referenced
+  - Any naming conventions already established
+
+EXISTING DEPENDENCIES
+  - What is in requirements.txt or pyproject.toml
+  - Whether databricks-sql-connector is already installed
+  - Whether any Databricks connection utility already exists
+  - Whether LiteLLM is present and how it is configured
+
+EXISTING CONFIGURATION
+  - How .env or config files are structured
+  - What environment variable names are already in use
+  - Whether DATABRICKS_HOST, HTTP_PATH, ACCESS_TOKEN are already defined
+
+LLM CONFIGURATION
+  - Which LLM model is currently configured — Claude, GPT, or Gemini
+  - Exact model string used in existing agent YAML files
+  - How the API key is managed and what the environment variable is called
+
+--------------------------------------------------------------------------------
+SECTION 2 — DECIDE THE OPTIMAL ARCHITECTURE
+--------------------------------------------------------------------------------
+Based on what you have learned about my repo and setup, decide the most
+optimal and efficient agent architecture for this project. Consider:
+
+OPTION A — THREE AGENTS
+  Agent 1: Data Fetcher Agent — Databricks SQL queries only, no LLM
+  Agent 2: Analyser Agent — pure Python classification logic, no LLM
+  Agent 3: Digest Generator Agent — one LLM call to generate email
+  
+  Best when: repo shows preference for separation of concerns, pure Python
+  logic is simpler than LLM reasoning given data structure, deterministic
+  output is important, or ADK pattern suits multi-agent orchestration well.
+
+OPTION B — TWO AGENTS
+  Agent 1: Data Fetcher Agent — Databricks SQL queries only, no LLM
+  Agent 2: Digest Generator Agent — LLM performs all reasoning and
+           generates the governance email in one call
+  
+  Best when: repo shows simpler two-agent patterns, LLM reasoning over
+  pre-aggregated query results is cleaner than Python classification logic,
+  hackathon time constraints favour fewer moving parts, or the data
+  structure makes Python classification unnecessarily complex.
+
+OPTION C — SINGLE AGENT WITH MULTIPLE TOOLS
+  One agent with tools for fetching data and one LLM call for reasoning
+  and email generation.
+  
+  Best when: repo shows single-agent patterns, overhead of multi-agent
+  orchestration is not justified, or simplicity of build is the priority.
+
+For each option state:
+  - Whether it fits my existing ADK patterns
+  - Whether it fits my data structure and query results
+  - Build complexity on hackathon day
+  - Tradeoffs honestly
+
+Then recommend the most optimal option with a clear reason. If two options
+are equally valid say so and explain the deciding factor.
+
+--------------------------------------------------------------------------------
+SECTION 3 — VALIDATED SQL QUERIES FROM SCHEMA VALIDATION
+--------------------------------------------------------------------------------
+These SQL queries were validated against my actual table schemas in Prompt 1.
+Use these exact queries when generating the Data Fetcher tools.
+
+[PASTE VALIDATED SQL QUERIES FROM PROMPT 1 RESPONSE HERE]
+
+Example of what to paste:
+  Feature 1 — Break Origin Detection SQL: ...
+  Feature 2 — Blast Radius Assessment SQL: ...
+  Feature 3 — Break Propagation Tracking SQL: ...
+  Feature 4 — Recurrence Pattern Detection SQL: ...
+  Feature 5 — Attribute Level Recurrence SQL: ...
+
+--------------------------------------------------------------------------------
+SECTION 4 — GENERATE ALL CODE
+--------------------------------------------------------------------------------
+Based on your architecture decision generate the complete codebase. All code
+must follow my existing repo patterns exactly. Do not introduce new patterns
+unless absolutely necessary — flag clearly when you do.
+
+Generate the following:
+
+ALL AGENT YAML FILES
+  - Root agent YAML following my existing orchestration pattern
+  - Sub-agent YAML files for each agent in your chosen architecture
+  - All following my exact existing YAML structure and naming conventions
+
+ALL TOOLS FILES
+  - Data Fetcher tools — Databricks SQL connector using validated SQL queries
+  - Analyser tools if Option A chosen — pure Python classification logic
+  - Digest Generator tools — LLM call using the runtime prompt below
+  - All following my existing tools.py pattern
+
+REPORT MAPPING CONFIG
+  report_mapping.json with this structure:
+  {
+    "report_mapping": [
+      {
+        "report_name": "Example Report Name",
+        "category": "A",
+        "criticality": "CRITICAL",
+        "audience": "Example audience description",
+        "consuming_tables": ["refined.example_table"]
+      }
+    ]
+  }
+  Generate three example entries — one per category A, B, C.
+  I will update the actual report names and tables after generation.
+
+ENVIRONMENT FILE
+  .env template with all required variables — following my existing .env
+  pattern. Include:
+    DATABRICKS_HOST
+    DATABRICKS_HTTP_PATH
+    DATABRICKS_ACCESS_TOKEN
+    LLM API key variable — using same name as my existing configuration
+    Any other variables your generated code requires
+
+REQUIREMENTS UPDATE
+  List any new packages that need adding to requirements.txt beyond what
+  already exists. Flag if databricks-sql-connector needs adding.
+
+--------------------------------------------------------------------------------
+SECTION 5 — RUNTIME LLM PROMPT
+--------------------------------------------------------------------------------
+This is the exact prompt to use inside the Digest Generator Agent when calling
+the LLM. Embed this prompt in the generate_email_digest tool or equivalent.
+
+IMPORTANT: The LLM receives pre-aggregated structured classifications only —
+never raw data records, never sensitive information, never actual row counts
+from the database. All aggregation and classification happens in Python before
+the LLM call. The LLM only receives a clean JSON summary object.
+
+The summary object passed to the LLM must follow this structure:
+{
+  "date": "YYYY-MM-DD",
+  "categories": {
+    "A": {
+      "status": "CLEAN or ACTION_REQUIRED or ESCALATE",
+      "break_count": 0,
+      "volume_anomalies": 0,
+      "origin": "source_layer or transformation_layer or business_logic_layer or none",
+      "propagated": true or false,
+      "recurrence": "first_occurrence or occasional or recurring or chronic or none",
+      "pattern": "month_end or weekly or random or none",
+      "affected_reports": [
+        {
+          "name": "Report Name",
+          "criticality": "CRITICAL or HIGH or MEDIUM",
+          "audience": "audience description"
+        }
+      ],
+      "top_breaking_attributes": [
+        {
+          "attribute": "attribute_name",
+          "break_type": "missing_records or duplicate_records",
+          "days_failing": 0,
+          "first_seen": "YYYY-MM-DD"
+        }
+      ]
+    },
+    "B": { ... same structure ... },
+    "C": { ... same structure ... }
+  }
+}
+
+THE RUNTIME PROMPT:
+
+---
+You are a data governance assistant. Your job is to generate a concise
+professional daily governance email based on a pre-computed reconciliation
+summary. You will receive structured classifications only — no raw data,
+no individual records, no sensitive information.
+
+The data platform has three business categories: A, B, and C. Each category
+contains multiple tables across three pipeline zones. All analysis has already
+been performed by the application. Your job is to translate the pre-computed
+classifications into a clear, actionable governance email summarised at
+category level only.
+
+CLASSIFICATIONS IN THE SUMMARY:
+
+STATUS
+  CLEAN           — no breaks, no volume anomalies
+  ACTION_REQUIRED — breaks detected, not yet affecting reports
+  ESCALATE        — breaks have reached refined layer, reports at risk
+
+ORIGIN
+  source_layer         — issue with incoming source data
+  transformation_layer — issue in data processing pipeline
+  business_logic_layer — issue in report preparation layer
+  none                 — no breaks
+
+PROPAGATED
+  true  — break has spread to a downstream zone overnight
+  false — break contained in originating zone
+
+RECURRENCE
+  first_occurrence — first occurrence in 30 days
+  occasional       — occurred once or twice recently
+  recurring        — recurring issue this month
+  chronic          — persistent ongoing issue
+  none             — no breaks
+
+PATTERN
+  month_end — consistent with month end processing patterns
+  weekly    — following a weekly pattern
+  random    — no identifiable pattern
+  none      — no breaks
+
+TODAY'S PRE-COMPUTED SUMMARY:
+{SUMMARY_JSON}
+
+GENERATE THE GOVERNANCE EMAIL IN EXACTLY THIS STRUCTURE:
+
+---
+DAILY RECON DIGEST — {DATE}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+OVERALL STATUS: [ALL CLEAR / ACTION REQUIRED / ESCALATE]
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CATEGORY SUMMARY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+CATEGORY A [✅ / ⚠️ / 🚨] — [one line status]
+[If CLEAN: one line only.
+ If breaks exist: 2 to 3 sentences covering what broke,
+ where it originated in plain English, whether it is new
+ or recurring, and which reports are at risk if any.]
+
+CATEGORY B [✅ / ⚠️ / 🚨] — [one line status]
+[Same pattern as above]
+
+CATEGORY C [✅ / ⚠️ / 🚨] — [one line status]
+[Same pattern as above]
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+RECOMMENDED ACTIONS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[Numbered. Most critical first. Maximum 5 actions.
+ If ALL CLEAR state: No action required today.]
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+---
+
+RULES YOU MUST FOLLOW:
+- Never mention zone names: OLTP, RAW, TRUSTED, REFINED
+- Never list individual table names
+- Never use abbreviations MT, MS, DUP
+- If a category is CLEAN write one line only — no exceptions
+- Maximum 250 words for the entire email body
+- Overall status is the worst status across all categories:
+    Any ESCALATE        → overall is ESCALATE
+    Any ACTION_REQUIRED → overall is ACTION REQUIRED
+    All CLEAN           → overall is ALL CLEAR
+- Tone: professional, factual, no filler phrases
+- Write as a senior data engineer briefing a governance committee
+---
+
+--------------------------------------------------------------------------------
+SECTION 6 — AFTER CODE GENERATION
+--------------------------------------------------------------------------------
+After generating all code please provide:
+
+  1. File structure — show exactly where each generated file sits in my repo
+  2. Setup steps — any pip installs or config steps needed before running
+  3. How to run — exact command to start the root agent
+  4. How to test — a simple test to confirm each agent is working correctly
+  5. Any risks or assumptions — flag anything that depends on my specific
+     Databricks setup or ADK version that might need adjustment
+--------------------------------------------------------------------------------
